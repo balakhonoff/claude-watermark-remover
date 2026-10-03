@@ -1,0 +1,40 @@
+{
+  "name": "claude-watermark-remover",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Open-source MCP server that removes statistical AI text watermarks (SynthID-style, Claude and Gemini) with your own OpenRouter key.",
+  "license": "MIT",
+  "author": "Kirill Balakhonov",
+  "repository": "github:krllagent/claude-watermark-remover",
+  "homepage": "https://painintheagent.com/tools/ai-text-watermark-remover/",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "claude-watermark-remover": "dist/index.cjs"
+  },
+  "files": [
+    "dist/",
+    "manifest.json",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "package": "node scripts/package.mjs",
+    "start": "node dist/index.cjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@types/node": "22.15.0",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "zod": "3.25.76"
+  },
+  "dependencies": {}
+}
