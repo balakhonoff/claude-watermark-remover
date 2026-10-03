@@ -5,7 +5,7 @@
   "description": "Open-source MCP server that removes statistical AI text watermarks (SynthID-style, Claude and Gemini) with your own OpenRouter key.",
   "license": "MIT",
   "author": "Kirill Balakhonov",
-  "repository": "github:krllagent/claude-watermark-remover",
+  "repository": "github:balakhonoff/claude-watermark-remover",
   "homepage": "https://painintheagent.com/tools/ai-text-watermark-remover/",
   "engines": {
     "node": ">=22"

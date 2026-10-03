@@ -21958,7 +21958,7 @@ function createClient(config2, fetchImpl = fetch, sleep = (ms) => new Promise((r
       try {
         response = await fetchImpl(`${config2.baseUrl}/chat/completions`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${config2.apiKey}`, "content-type": "application/json", "HTTP-Referer": "https://github.com/krllagent/claude-watermark-remover", "X-Title": "claude-watermark-remover" },
+          headers: { Authorization: `Bearer ${config2.apiKey}`, "content-type": "application/json", "HTTP-Referer": "https://github.com/balakhonoff/claude-watermark-remover", "X-Title": "claude-watermark-remover" },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         });

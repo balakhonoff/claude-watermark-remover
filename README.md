@@ -42,7 +42,7 @@ model it costs nothing (see [Free models](#free-models)).
 
 ### Claude Desktop
 
-1. Download [claude-watermark-remover-0.1.0.mcpb](https://github.com/krllagent/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.mcpb) (checksums in [releases/SHA256SUMS](https://github.com/krllagent/claude-watermark-remover/raw/main/releases/SHA256SUMS)).
+1. Download [claude-watermark-remover-0.1.0.mcpb](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.mcpb) (checksums in [releases/SHA256SUMS](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/SHA256SUMS)).
 2. Open the file. Claude Desktop installs it as an extension and asks for your OpenRouter API key (stored by Claude
    Desktop, not by this program) and, optionally, a model.
 3. In a chat: *"Remove the watermark from this text: …"*.
@@ -50,7 +50,7 @@ model it costs nothing (see [Free models](#free-models)).
 ### Claude Code
 
 ```bash
-claude mcp add watermark-remover -e OPENROUTER_API_KEY=sk-or-… -- npx -y --package=https://github.com/krllagent/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover
+claude mcp add watermark-remover -e OPENROUTER_API_KEY=sk-or-… -- npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover
 ```
 
 Then in a session: *"Use remove_watermark on the text in draft.md and show me the result."*
@@ -63,7 +63,7 @@ Install once, then add a stdio server with the command `claude-watermark-remover
 `OPENROUTER_API_KEY`:
 
 ```bash
-npm install -g https://github.com/krllagent/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz
+npm install -g https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz
 ```
 
 For Codex, in `~/.codex/config.toml`:
@@ -78,7 +78,7 @@ env = { OPENROUTER_API_KEY = "sk-or-…" }
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-…
-npx -y --package=https://github.com/krllagent/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover --text-file draft.txt
+npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover --text-file draft.txt
 ```
 
 The package is a single self-contained file (`dist/index.cjs`, Node 22+); the tarball and the `.mcpb` live in

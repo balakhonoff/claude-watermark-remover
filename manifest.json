@@ -6,9 +6,9 @@
   "description": "Remove statistical AI text watermarks (SynthID-style, Claude and Gemini) with your own OpenRouter key, free models included.",
   "long_description": "One rewrite by one model that keeps the meaning, structure, formatting and language of your text; links, quotations, amounts and percentages return unchanged. Your text goes only to OpenRouter with your own key. Hosted version without keys, for claude.ai on the web and phones: https://painintheagent.com",
   "author": { "name": "Kirill Balakhonov", "url": "https://painintheagent.com/about/" },
-  "homepage": "https://github.com/krllagent/claude-watermark-remover",
-  "documentation": "https://github.com/krllagent/claude-watermark-remover#readme",
-  "repository": { "type": "git", "url": "https://github.com/krllagent/claude-watermark-remover.git" },
+  "homepage": "https://github.com/balakhonoff/claude-watermark-remover",
+  "documentation": "https://github.com/balakhonoff/claude-watermark-remover#readme",
+  "repository": { "type": "git", "url": "https://github.com/balakhonoff/claude-watermark-remover.git" },
   "license": "MIT",
   "keywords": ["watermark", "synthid", "claude", "gemini", "rewrite", "openrouter", "mcp"],
   "server": {
