@@ -9,8 +9,9 @@ Works in Claude Desktop, Claude Code, Codex, Cursor and any other MCP client.
 
 > **Prefer not to deal with keys and installs?**
 > **[Hosted version at painintheagent.com →](https://painintheagent.com/tools/ai-text-watermark-remover/)**
-> The same rewrite as a one-click connector for claude.ai (works in the browser and on phones, where local MCP servers
-> cannot run), plus the AI Humanizer and detectors. $10 a month, no OpenRouter account needed.
+> The same rewrite as a connector for claude.ai (it works in the browser and on phones, where a local MCP server
+> cannot run) and as a web tool, plus an AI Humanizer and detectors. No OpenRouter account needed: three free runs,
+> then $5 for 100,000 characters.
 > Remote MCP URL: `https://painintheagent.com/mcp` · [API & MCP docs](https://painintheagent.com/integrations/)
 
 ## What it does

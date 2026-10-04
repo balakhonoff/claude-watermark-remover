@@ -22100,7 +22100,7 @@ async function serve() {
       base_url: config2.baseUrl,
       note: config2.preset.note,
       presets: Object.values(PRESETS).map((preset) => ({ model: preset.model, reasoning: preset.reasoning, note: preset.note })),
-      hosted_alternative: "https://painintheagent.com \u2014 the same rewrite without keys, in claude.ai on the web and phones, plus the Humanizer; $10 a month."
+      hosted_alternative: "https://painintheagent.com \u2014 the same rewrite without keys, as a connector for claude.ai on the web and phones and as a web tool, plus the Humanizer."
     } : { error: configError };
     return { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload };
   });
