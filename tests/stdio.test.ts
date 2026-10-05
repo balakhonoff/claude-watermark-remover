@@ -34,17 +34,17 @@ describe("the bundled server over stdio", () => {
   it("lists the tools, rewrites through the configured base URL with the key from the environment, and keeps protected spans", async () => {
     const client = new Client({ name: "fixture", version: "0.0.0" });
     const transport = new StdioClientTransport({ command: process.execPath, args: ["dist/index.cjs"],
-      env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), OPENROUTER_API_KEY: "sk-or-fixture", OPENROUTER_BASE_URL: baseUrl, WATERMARK_MODEL: "fixture/model" } });
+      env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), OPENROUTER_API_KEY: "sk-or-fixture", OPENROUTER_BASE_URL: baseUrl, WATERMARK_MODEL: "fixture/model:free" } });
     await client.connect(transport);
     try {
       const tools = (await client.listTools()).tools.map(tool => tool.name).sort();
       expect(tools).toEqual(["get_configuration", "remove_watermark"]);
       const configuration = (await client.callTool({ name: "get_configuration", arguments: {} })).structuredContent as Record<string, unknown>;
-      expect(configuration).toMatchObject({ model: "fixture/model", base_url: baseUrl, temperature: 0.7 });
+      expect(configuration).toMatchObject({ model: "fixture/model:free", base_url: baseUrl, temperature: 0.7 });
       const result = await client.callTool({ name: "remove_watermark", arguments: { text: source } });
       expect(result.isError).not.toBe(true);
       const payload = result.structuredContent as Record<string, unknown>;
-      expect(payload).toMatchObject({ target_met: true, layout_kept: true, model_calls: 1, model: "fixture/model", provider: "Fixture", cost_usd: 0 });
+      expect(payload).toMatchObject({ target_met: true, layout_kept: true, model_calls: 1, model: "fixture/model:free", provider: "Fixture", cost_usd: 0 });
       expect(payload.novelty_percent as number).toBeGreaterThanOrEqual(80);
       expect(String(payload.text)).toContain("https://example.org/plan");
       expect(String(payload.text)).toContain("$34");

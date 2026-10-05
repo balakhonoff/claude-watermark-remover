@@ -31,10 +31,28 @@ figures here come from a quick script, the tool's own measure is similar. Every 
 With the default reasoning setting (neither off nor low) the reasoning models spent their whole output budget
 thinking and returned nothing, so this program sets `low` for free models and raises the output budget.
 
+## 2026-10-05, two days later
+
+The free list had 20 models and `qwen/qwen3.8-27b:free` was no longer on it ("This model is unavailable for free").
+The table shows the same prompt through this program on a 1,074-character prose text of three paragraphs, with
+the "may train on inputs" setting off.
+
+| Model | Result |
+|---|---|
+| `inclusionai/ling-3.0-flash-sante:free`, reasoning low | three runs: 158 s and 216 s with two drafts and 70% replaced; 61 s with one draft and 87%; layout kept every time |
+| the same, reasoning off | ran out of output tokens |
+| the same, reasoning medium | empty answer |
+| `google/gemma-4-31b-it:free`, `gemma-4-26b-a4b-it:free` | 429 "busy" after three waits |
+| `apodex/apodex-1.1-mini:free` | broke the paragraph layout twice: an error, no text |
+| `dots-studio/dots-3-note-preview:free`, `cohere/north-mini-code:free` | no answer within 4 minutes |
+| `nvidia/nemotron-3-super-120b-a12b:free`, `liquid/lfm-2.5-2.6b:free`, `poolside/laguna-s-2.1:free` | closed without the training setting; not measured that day |
+| `thinkingmachines/inkling-small:free` | 403: only for agentic harnesses |
+
 ## What this means
 
-- Free and usable: `qwen/qwen3.8-27b:free` (no privacy toggle needed, slow) and `nvidia/nemotron-3-super-120b-a12b:free`
-  (faster, needs the toggle). Both are a lottery for availability.
-- Almost free: `qwen/qwen3.7-plus` at about $0.001 per 1,000 characters, 2–10 s, 85–100% replaced. $5 of OpenRouter
-  credit lasts years, and buying it also raises the free-model limit to 1,000 requests a day.
-- No keys at all, and in claude.ai on the web and phones: the hosted version at https://painintheagent.com.
+- On 2026-10-05, free and working without the training setting: `inclusionai/ling-3.0-flash-sante:free`, one to
+  three and a half minutes, 70% replaced on two runs and 87% on the third (the target is 80%). With the setting on, `nvidia/nemotron-3-super-120b-a12b:free`
+  was faster on 2026-10-03. Both are a lottery for availability, and the best free model of October 3 is gone.
+- This program accepts any model id that ends in `:free`, because this list will be out of date soon.
+- No keys, an answer in 2 to 10 seconds, and claude.ai on the web and phones: the hosted version at
+  https://painintheagent.com ($10 a month for 100,000 characters).

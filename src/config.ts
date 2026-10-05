@@ -21,24 +21,27 @@ export interface ModelPreset {
 }
 
 /**
- * Presets measured on 2026-10-03 with the production prompt on a 1,316-character text. The paid default is the
- * model of the published SynthID test (painintheagent.com/blog/text-watermark-removal-retest/).
+ * This program runs on OpenRouter's free models only. Free models come and go (the first default of this program
+ * stopped being free two days after it was measured), so the default is a list tried in order, and any id ending
+ * in ":free" is accepted. Measurements: docs/free-models.md.
  */
 export const PRESETS: Record<string, ModelPreset> = {
-  "qwen/qwen3.7-plus": { model: "qwen/qwen3.7-plus", reasoning: "none", maxTokens: 16_000, providers: ["alibaba"], busyRetries: 0,
-    note: "the model of the published test: 2–10 s, about $0.001 per 1,000 characters" },
-  "qwen/qwen3.8-27b:free": { model: "qwen/qwen3.8-27b:free", reasoning: "low", maxTokens: 16_000, providers: [], busyRetries: 3,
-    note: "free; needs low reasoning (46 s, 81% of five-word sequences replaced); often busy" },
+  "inclusionai/ling-3.0-flash-sante:free": { model: "inclusionai/ling-3.0-flash-sante:free", reasoning: "low", maxTokens: 16_000, providers: [], busyRetries: 3,
+    note: "free; measured 2026-10-05 on three runs: 61–216 s, 70%, 70% and 87% of five-word sequences replaced, layout kept" },
   "nvidia/nemotron-3-super-120b-a12b:free": { model: "nvidia/nemotron-3-super-120b-a12b:free", reasoning: "low", maxTokens: 16_000, providers: [], busyRetries: 3,
-    note: "free; 12–25 s, 63–78% replaced; only with OpenRouter's 'free endpoints may train on inputs' setting on" },
+    note: "free; measured 2026-10-03: 12–25 s, 63–78% replaced; only with OpenRouter's 'free endpoints may train on inputs' setting on" },
 };
 
-export const DEFAULT_MODEL = "qwen/qwen3.7-plus";
+/** Tried in this order until one returns a usable rewrite. */
+export const DEFAULT_MODELS = ["inclusionai/ling-3.0-flash-sante:free", "nvidia/nemotron-3-super-120b-a12b:free"];
+export const DEFAULT_MODEL = DEFAULT_MODELS[0];
 
 export interface Config {
   apiKey: string;
   baseUrl: string;
   preset: ModelPreset;
+  /** Further free models, tried in order when the one before fails. */
+  fallbacks: ModelPreset[];
   temperature: number;
 }
 
@@ -50,17 +53,19 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) throw new ConfigError("OPENROUTER_API_KEY is not set. Create a key at https://openrouter.ai/settings/keys and put it in the server's environment.");
   const baseUrl = (env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1").replace(/\/+$/u, "");
-  const model = env.WATERMARK_MODEL?.trim() || DEFAULT_MODEL;
-  const known = PRESETS[model];
+  // One id or a comma-separated list. OpenRouter's free list changes often, so any free id is accepted, not only the measured ones.
+  const models = (env.WATERMARK_MODEL?.trim() ? env.WATERMARK_MODEL.split(",").map(value => value.trim()).filter(Boolean) : DEFAULT_MODELS);
+  const paid = models.find(model => !model.endsWith(":free"));
+  if (paid || !models.length) throw new ConfigError(`WATERMARK_MODEL must name OpenRouter's free models (ids ending in ":free", one or several separated by commas), for example ${DEFAULT_MODEL}. See docs/free-models.md.`);
   const reasoningEnv = env.WATERMARK_REASONING?.trim() as Reasoning | undefined;
   if (reasoningEnv && !reasoningValues.includes(reasoningEnv)) throw new ConfigError(`WATERMARK_REASONING must be one of ${reasoningValues.join(", ")}.`);
-  const preset: ModelPreset = known
-    ? { ...known, ...(reasoningEnv ? { reasoning: reasoningEnv } : {}) }
-    : { model, reasoning: reasoningEnv ?? (model.endsWith(":free") ? "low" : "none"), maxTokens: 16_000, providers: [], busyRetries: model.endsWith(":free") ? 3 : 0,
-        note: "a model without a measured preset; check the result" };
+  const presets = models.map((model): ModelPreset => PRESETS[model]
+    ? { ...PRESETS[model], ...(reasoningEnv ? { reasoning: reasoningEnv } : {}) }
+    : { model, reasoning: reasoningEnv ?? "low", maxTokens: 16_000, providers: [], busyRetries: 3, note: "a free model without a measured preset; check the result" });
+  const [preset, ...fallbacks] = presets;
   const providersEnv = env.WATERMARK_PROVIDERS?.trim();
   if (providersEnv !== undefined) preset.providers = providersEnv ? providersEnv.split(",").map(value => value.trim()).filter(Boolean) : [];
   const temperature = env.WATERMARK_TEMPERATURE ? Number(env.WATERMARK_TEMPERATURE) : 0.7;
   if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new ConfigError("WATERMARK_TEMPERATURE must be a number between 0 and 2.");
-  return { apiKey, baseUrl, preset, temperature };
+  return { apiKey, baseUrl, preset, fallbacks, temperature };
 }

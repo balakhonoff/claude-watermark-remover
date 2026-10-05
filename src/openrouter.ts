@@ -87,9 +87,9 @@ export function createClient(config: Config, fetchImpl: Fetch = fetch, sleep: (m
 function describeFailure(status: number, text: string, model: string): string {
   let raw = "";
   try { raw = JSON.parse(text)?.error?.metadata?.raw ?? JSON.parse(text)?.error?.message ?? ""; } catch { /* not JSON */ }
-  if (status === 429) return `${model} is busy right now (OpenRouter 429). Free models are shared: wait a minute and try again, or set WATERMARK_MODEL to a paid model such as qwen/qwen3.7-plus.`;
+  if (status === 429) return `${model} is busy right now (OpenRouter 429). Free models are shared and limited per day: wait a minute and try again, or set WATERMARK_MODEL to another free model (docs/free-models.md).`;
   if (status === 401) return "OpenRouter rejected the key (401). Check OPENROUTER_API_KEY.";
-  if (status === 402) return "OpenRouter reports no credit (402). Add credit at https://openrouter.ai/settings/credits or use a free model.";
+  if (status === 402) return "OpenRouter refused the request for a billing reason (402). Free models need no credit: check the account at https://openrouter.ai/settings/credits.";
   if (status === 404 && /data policy|training/iu.test(raw)) return `${model} is not available under your OpenRouter privacy settings: this free endpoint may train on inputs. Allow that at https://openrouter.ai/settings/privacy, or choose another model.`;
   return `OpenRouter returned HTTP ${status} for ${model}${raw ? `: ${raw.slice(0, 200)}` : ""}.`;
 }

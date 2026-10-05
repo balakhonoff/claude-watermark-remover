@@ -21439,21 +21439,13 @@ var StdioServerTransport = class {
 
 // src/config.ts
 var PRESETS = {
-  "qwen/qwen3.7-plus": {
-    model: "qwen/qwen3.7-plus",
-    reasoning: "none",
-    maxTokens: 16e3,
-    providers: ["alibaba"],
-    busyRetries: 0,
-    note: "the model of the published test: 2\u201310 s, about $0.001 per 1,000 characters"
-  },
-  "qwen/qwen3.8-27b:free": {
-    model: "qwen/qwen3.8-27b:free",
+  "inclusionai/ling-3.0-flash-sante:free": {
+    model: "inclusionai/ling-3.0-flash-sante:free",
     reasoning: "low",
     maxTokens: 16e3,
     providers: [],
     busyRetries: 3,
-    note: "free; needs low reasoning (46 s, 81% of five-word sequences replaced); often busy"
+    note: "free; measured 2026-10-05 on three runs: 61\u2013216 s, 70%, 70% and 87% of five-word sequences replaced, layout kept"
   },
   "nvidia/nemotron-3-super-120b-a12b:free": {
     model: "nvidia/nemotron-3-super-120b-a12b:free",
@@ -21461,10 +21453,11 @@ var PRESETS = {
     maxTokens: 16e3,
     providers: [],
     busyRetries: 3,
-    note: "free; 12\u201325 s, 63\u201378% replaced; only with OpenRouter's 'free endpoints may train on inputs' setting on"
+    note: "free; measured 2026-10-03: 12\u201325 s, 63\u201378% replaced; only with OpenRouter's 'free endpoints may train on inputs' setting on"
   }
 };
-var DEFAULT_MODEL = "qwen/qwen3.7-plus";
+var DEFAULT_MODELS = ["inclusionai/ling-3.0-flash-sante:free", "nvidia/nemotron-3-super-120b-a12b:free"];
+var DEFAULT_MODEL = DEFAULT_MODELS[0];
 var ConfigError = class extends Error {
 };
 var reasoningValues = ["none", "low", "medium", "high"];
@@ -21472,23 +21465,18 @@ function readConfig(env = process.env) {
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) throw new ConfigError("OPENROUTER_API_KEY is not set. Create a key at https://openrouter.ai/settings/keys and put it in the server's environment.");
   const baseUrl = (env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1").replace(/\/+$/u, "");
-  const model = env.WATERMARK_MODEL?.trim() || DEFAULT_MODEL;
-  const known = PRESETS[model];
+  const models = env.WATERMARK_MODEL?.trim() ? env.WATERMARK_MODEL.split(",").map((value) => value.trim()).filter(Boolean) : DEFAULT_MODELS;
+  const paid = models.find((model) => !model.endsWith(":free"));
+  if (paid || !models.length) throw new ConfigError(`WATERMARK_MODEL must name OpenRouter's free models (ids ending in ":free", one or several separated by commas), for example ${DEFAULT_MODEL}. See docs/free-models.md.`);
   const reasoningEnv = env.WATERMARK_REASONING?.trim();
   if (reasoningEnv && !reasoningValues.includes(reasoningEnv)) throw new ConfigError(`WATERMARK_REASONING must be one of ${reasoningValues.join(", ")}.`);
-  const preset = known ? { ...known, ...reasoningEnv ? { reasoning: reasoningEnv } : {} } : {
-    model,
-    reasoning: reasoningEnv ?? (model.endsWith(":free") ? "low" : "none"),
-    maxTokens: 16e3,
-    providers: [],
-    busyRetries: model.endsWith(":free") ? 3 : 0,
-    note: "a model without a measured preset; check the result"
-  };
+  const presets = models.map((model) => PRESETS[model] ? { ...PRESETS[model], ...reasoningEnv ? { reasoning: reasoningEnv } : {} } : { model, reasoning: reasoningEnv ?? "low", maxTokens: 16e3, providers: [], busyRetries: 3, note: "a free model without a measured preset; check the result" });
+  const [preset, ...fallbacks] = presets;
   const providersEnv = env.WATERMARK_PROVIDERS?.trim();
   if (providersEnv !== void 0) preset.providers = providersEnv ? providersEnv.split(",").map((value) => value.trim()).filter(Boolean) : [];
   const temperature = env.WATERMARK_TEMPERATURE ? Number(env.WATERMARK_TEMPERATURE) : 0.7;
   if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new ConfigError("WATERMARK_TEMPERATURE must be a number between 0 and 2.");
-  return { apiKey, baseUrl, preset, temperature };
+  return { apiKey, baseUrl, preset, fallbacks, temperature };
 }
 
 // src/canonical-json.ts
@@ -22005,9 +21993,9 @@ function describeFailure(status, text, model) {
     raw = JSON.parse(text)?.error?.metadata?.raw ?? JSON.parse(text)?.error?.message ?? "";
   } catch {
   }
-  if (status === 429) return `${model} is busy right now (OpenRouter 429). Free models are shared: wait a minute and try again, or set WATERMARK_MODEL to a paid model such as qwen/qwen3.7-plus.`;
+  if (status === 429) return `${model} is busy right now (OpenRouter 429). Free models are shared and limited per day: wait a minute and try again, or set WATERMARK_MODEL to another free model (docs/free-models.md).`;
   if (status === 401) return "OpenRouter rejected the key (401). Check OPENROUTER_API_KEY.";
-  if (status === 402) return "OpenRouter reports no credit (402). Add credit at https://openrouter.ai/settings/credits or use a free model.";
+  if (status === 402) return "OpenRouter refused the request for a billing reason (402). Free models need no credit: check the account at https://openrouter.ai/settings/credits.";
   if (status === 404 && /data policy|training/iu.test(raw)) return `${model} is not available under your OpenRouter privacy settings: this free endpoint may train on inputs. Allow that at https://openrouter.ai/settings/privacy, or choose another model.`;
   return `OpenRouter returned HTTP ${status} for ${model}${raw ? `: ${raw.slice(0, 200)}` : ""}.`;
 }
@@ -22023,17 +22011,23 @@ async function removeWatermark(text, config2, options = {}) {
   if (length > MAX_CHARS) throw new RemovalError(`The text has ${length} characters; at most ${MAX_CHARS} are processed in one call. Split it at a section boundary.`);
   const style = options.styleGuidance?.trim() ?? "";
   if (Array.from(style).length > STYLE_GUIDANCE_MAX_CHARS) throw new RemovalError(`style_guidance must be at most ${STYLE_GUIDANCE_MAX_CHARS} characters.`);
-  const client = createClient(config2, options.fetchImpl);
   const started = Date.now();
-  let run;
-  try {
-    run = await runSinglePassParaphrase(text, client.complete, style ? { styleGuidance: style, temperature: config2.temperature } : { temperature: config2.temperature });
-  } catch (error2) {
-    if (error2 instanceof PipelineValidationError) throw new RemovalError(`No usable rewrite: ${error2.message}. Nothing was returned; try again or shorten the text.`);
-    if (error2 instanceof CompletionTokenLimitError) throw new RemovalError(`${config2.preset.model} ran out of output tokens before finishing (reasoning models spend them thinking). Try WATERMARK_REASONING=low or a shorter text.`);
-    if (error2 instanceof ModelCallError) throw new RemovalError(error2.message);
-    throw error2;
+  const skipped = [];
+  let client, run;
+  for (const preset of [config2.preset, ...config2.fallbacks]) {
+    const attempt = createClient({ ...config2, preset }, options.fetchImpl, options.sleep);
+    try {
+      run = await runSinglePassParaphrase(text, attempt.complete, style ? { styleGuidance: style, temperature: config2.temperature } : { temperature: config2.temperature });
+      client = attempt;
+      break;
+    } catch (error2) {
+      if (error2 instanceof PipelineValidationError) skipped.push(`${preset.model}: no usable rewrite (${error2.message})`);
+      else if (error2 instanceof CompletionTokenLimitError) skipped.push(`${preset.model}: ran out of output tokens while reasoning`);
+      else if (error2 instanceof ModelCallError) skipped.push(error2.message.startsWith(preset.model) ? error2.message : `${preset.model}: ${error2.message}`);
+      else throw error2;
+    }
   }
+  if (!run || !client) throw new RemovalError(skipped.length === 1 ? `${skipped[0]} Nothing was returned.` : `None of the ${skipped.length} free models returned a usable rewrite. ${skipped.join(" | ")}`);
   const novelty = fiveGramNovelty(text, run.text);
   const last = client.calls.at(-1);
   const costs = client.calls.map((call) => call.costUsd).filter((value) => typeof value === "number");
@@ -22045,6 +22039,7 @@ async function removeWatermark(text, config2, options = {}) {
     layout_kept: layoutKept(text, run.text),
     model: last?.model ?? config2.preset.model,
     ...last?.provider ? { provider: last.provider } : {},
+    ...skipped.length ? { skipped_models: skipped } : {},
     model_calls: run.calls,
     ...run.retryReason ? { retry_reason: run.retryReason } : {},
     seconds: Math.round((Date.now() - started) / 100) / 10,
@@ -22054,9 +22049,9 @@ async function removeWatermark(text, config2, options = {}) {
 }
 
 // src/index.ts
-var VERSION = "0.1.1";
+var VERSION = "0.2.0";
 function describeModel(config2) {
-  return `${config2.preset.model} (${config2.preset.note})`;
+  return config2.fallbacks.length ? `${config2.preset.model}, then ${config2.fallbacks.map((preset) => preset.model).join(", ")} if it gives nothing` : `${config2.preset.model} (${config2.preset.note})`;
 }
 async function serve() {
   let config2;
@@ -22066,7 +22061,7 @@ async function serve() {
   } catch (error2) {
     configError = error2 instanceof ConfigError ? error2.message : String(error2);
   }
-  const instructions = "Removes a statistical AI text watermark, the kind ChatGPT, Claude and Gemini put into text, by rewriting the wording with " + (config2 ? describeModel(config2) : "the configured OpenRouter model") + ", paid with the user's own OpenRouter key. One model draft; a second only when a check of length, layout or wording fails. No second model checks the meaning: tell the user to compare the result with the source. Use it only when the user asks to remove a watermark or to rewrite a text for that purpose.";
+  const instructions = "Removes a statistical AI text watermark, the kind ChatGPT, Claude and Gemini put into text, by rewriting the wording with " + (config2 ? describeModel(config2) : "the configured OpenRouter model") + ", one of OpenRouter's free models, called with the user's own OpenRouter key. One model draft; a second only when a check of length, layout or wording fails. No second model checks the meaning: tell the user to compare the result with the source. Use it only when the user asks to remove a watermark or to rewrite a text for that purpose.";
   const server = new McpServer({ name: "claude-watermark-remover", version: VERSION }, { instructions });
   server.registerTool("remove_watermark", {
     title: "Remove the watermark, keep the text",
@@ -22094,6 +22089,7 @@ async function serve() {
   }, async () => {
     const payload = config2 ? {
       model: config2.preset.model,
+      fallback_models: config2.fallbacks.map((preset) => preset.model),
       reasoning: config2.preset.reasoning,
       temperature: config2.temperature,
       providers: config2.preset.providers,

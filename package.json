@@ -1,6 +1,6 @@
 {
   "name": "claude-watermark-remover",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "Open-source MCP server that rewrites ChatGPT, Claude and Gemini text so its statistical watermark no longer matches, with your own OpenRouter key.",
   "license": "MIT",

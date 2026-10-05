@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "claude-watermark-remover",
   "display_name": "Claude Watermark Remover",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Rewrite ChatGPT, Claude and Gemini text so its statistical watermark no longer matches, with your own OpenRouter key. Free models included.",
   "long_description": "One rewrite by one model that is instructed to keep the meaning, structure, formatting and language of your text; links, quotations, amounts and percentages return unchanged. Your text goes only to OpenRouter with your own key. Measured on SynthID Text with a research key; the ChatGPT, Claude and Gemini detectors are not public, so complete removal cannot be verified. Hosted version without keys, for claude.ai on the web and phones: https://painintheagent.com",
   "author": {
@@ -65,15 +65,15 @@
     "openrouter_api_key": {
       "type": "string",
       "title": "OpenRouter API key",
-      "description": "Create one at https://openrouter.ai/settings/keys. Set a credit limit on the key. It is stored by Claude Desktop and never leaves your computer except to OpenRouter.",
+      "description": "Create one at https://openrouter.ai/settings/keys. A free OpenRouter account is enough. It is stored by Claude Desktop and never leaves your computer except to OpenRouter.",
       "sensitive": true,
       "required": true
     },
     "model": {
       "type": "string",
       "title": "Model",
-      "description": "qwen/qwen3.7-plus (the tested model, about $0.001 per 1,000 characters), qwen/qwen3.8-27b:free (free, slower, often busy) or nvidia/nemotron-3-super-120b-a12b:free (free; needs OpenRouter's 'free endpoints may train on inputs' setting).",
-      "default": "qwen/qwen3.7-plus",
+      "description": "OpenRouter free models, tried in this order; ids ending in :free, separated by commas. Free models are slow and are withdrawn without notice; see the README for what was measured.",
+      "default": "inclusionai/ling-3.0-flash-sante:free,nvidia/nemotron-3-super-120b-a12b:free",
       "required": false
     }
   }

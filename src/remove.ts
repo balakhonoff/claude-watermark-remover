@@ -18,6 +18,8 @@ export interface RemovalResult {
   layout_kept: boolean;
   model: string;
   provider?: string;
+  /** Free models that were tried before this one and why each gave nothing, when any did. */
+  skipped_models?: string[];
   model_calls: number;
   retry_reason?: string;
   seconds: number;
@@ -29,23 +31,30 @@ export interface RemovalResult {
 
 export class RemovalError extends Error {}
 
-export async function removeWatermark(text: string, config: Config, options: { styleGuidance?: string; fetchImpl?: typeof fetch } = {}): Promise<RemovalResult> {
+export async function removeWatermark(text: string, config: Config, options: { styleGuidance?: string; fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {}): Promise<RemovalResult> {
   const length = Array.from(text).length;
   if (length < MIN_CHARS) throw new RemovalError(`The text has ${length} characters; at least ${MIN_CHARS} are needed. Below about 750 characters the replaced share is a coarse measure.`);
   if (length > MAX_CHARS) throw new RemovalError(`The text has ${length} characters; at most ${MAX_CHARS} are processed in one call. Split it at a section boundary.`);
   const style = options.styleGuidance?.trim() ?? "";
   if (Array.from(style).length > STYLE_GUIDANCE_MAX_CHARS) throw new RemovalError(`style_guidance must be at most ${STYLE_GUIDANCE_MAX_CHARS} characters.`);
-  const client = createClient(config, options.fetchImpl);
   const started = Date.now();
-  let run;
-  try {
-    run = await runSinglePassParaphrase(text, client.complete, style ? { styleGuidance: style, temperature: config.temperature } : { temperature: config.temperature });
-  } catch (error) {
-    if (error instanceof PipelineValidationError) throw new RemovalError(`No usable rewrite: ${error.message}. Nothing was returned; try again or shorten the text.`);
-    if (error instanceof CompletionTokenLimitError) throw new RemovalError(`${config.preset.model} ran out of output tokens before finishing (reasoning models spend them thinking). Try WATERMARK_REASONING=low or a shorter text.`);
-    if (error instanceof ModelCallError) throw new RemovalError(error.message);
-    throw error;
+  // Free models are busy, withdrawn or closed by a privacy setting without notice: try the configured ones in order.
+  const skipped: string[] = [];
+  let client: ReturnType<typeof createClient> | undefined, run: Awaited<ReturnType<typeof runSinglePassParaphrase>> | undefined;
+  for (const preset of [config.preset, ...config.fallbacks]) {
+    const attempt = createClient({ ...config, preset }, options.fetchImpl, options.sleep);
+    try {
+      run = await runSinglePassParaphrase(text, attempt.complete, style ? { styleGuidance: style, temperature: config.temperature } : { temperature: config.temperature });
+      client = attempt;
+      break;
+    } catch (error) {
+      if (error instanceof PipelineValidationError) skipped.push(`${preset.model}: no usable rewrite (${error.message})`);
+      else if (error instanceof CompletionTokenLimitError) skipped.push(`${preset.model}: ran out of output tokens while reasoning`);
+      else if (error instanceof ModelCallError) skipped.push(error.message.startsWith(preset.model) ? error.message : `${preset.model}: ${error.message}`);
+      else throw error;
+    }
   }
+  if (!run || !client) throw new RemovalError(skipped.length === 1 ? `${skipped[0]} Nothing was returned.` : `None of the ${skipped.length} free models returned a usable rewrite. ${skipped.join(" | ")}`);
   const novelty = fiveGramNovelty(text, run.text);
   const last: CallRecord | undefined = client.calls.at(-1);
   const costs = client.calls.map(call => call.costUsd).filter((value): value is number => typeof value === "number");
@@ -57,6 +66,7 @@ export async function removeWatermark(text: string, config: Config, options: { s
     layout_kept: layoutKept(text, run.text),
     model: last?.model ?? config.preset.model,
     ...(last?.provider ? { provider: last.provider } : {}),
+    ...(skipped.length ? { skipped_models: skipped } : {}),
     model_calls: run.calls,
     ...(run.retryReason ? { retry_reason: run.retryReason } : {}),
     seconds: Math.round((Date.now() - started) / 100) / 10,

@@ -10,10 +10,10 @@ import { ConfigError, PRESETS, readConfig, type Config } from "./config.js";
 import { STYLE_GUIDANCE_MAX_CHARS } from "./core.js";
 import { MAX_CHARS, MIN_CHARS, RemovalError, removeWatermark } from "./remove.js";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 
 function describeModel(config: Config): string {
-  return `${config.preset.model} (${config.preset.note})`;
+  return config.fallbacks.length ? `${config.preset.model}, then ${config.fallbacks.map(preset => preset.model).join(", ")} if it gives nothing` : `${config.preset.model} (${config.preset.note})`;
 }
 
 async function serve(): Promise<void> {
@@ -22,7 +22,7 @@ async function serve(): Promise<void> {
   try { config = readConfig(); } catch (error) { configError = error instanceof ConfigError ? error.message : String(error); }
   const instructions = "Removes a statistical AI text watermark, the kind ChatGPT, Claude and Gemini put into text, by rewriting the wording with " +
     (config ? describeModel(config) : "the configured OpenRouter model") +
-    ", paid with the user's own OpenRouter key. One model draft; a second only when a check of length, layout or wording fails. " +
+    ", one of OpenRouter's free models, called with the user's own OpenRouter key. One model draft; a second only when a check of length, layout or wording fails. " +
     "No second model checks the meaning: tell the user to compare the result with the source. Use it only when the user asks to remove a watermark or to rewrite a text for that purpose.";
   const server = new McpServer({ name: "claude-watermark-remover", version: VERSION }, { instructions });
   server.registerTool("remove_watermark", {
@@ -50,7 +50,7 @@ async function serve(): Promise<void> {
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async () => {
     const payload = config
-      ? { model: config.preset.model, reasoning: config.preset.reasoning, temperature: config.temperature, providers: config.preset.providers, base_url: config.baseUrl, note: config.preset.note,
+      ? { model: config.preset.model, fallback_models: config.fallbacks.map(preset => preset.model), reasoning: config.preset.reasoning, temperature: config.temperature, providers: config.preset.providers, base_url: config.baseUrl, note: config.preset.note,
           presets: Object.values(PRESETS).map(preset => ({ model: preset.model, reasoning: preset.reasoning, note: preset.note })),
           hosted_alternative: "https://painintheagent.com: the same rewrite without keys, as a connector for claude.ai on the web and phones and as a web tool, plus the Humanizer." }
       : { error: configError };
