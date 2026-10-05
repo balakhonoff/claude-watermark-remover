@@ -21762,6 +21762,19 @@ function layoutSignature(text) {
 function layoutKept(source, candidate) {
   return JSON.stringify(layoutSignature(source)) === JSON.stringify(layoutSignature(candidate));
 }
+function withSourceSeparators(source, candidate) {
+  const SEPARATOR = /\n(?:[ \t]*\n)*/gu;
+  const normalized = source.replace(/\r\n?/gu, "\n").trim();
+  const separators = normalized.match(SEPARATOR) ?? [];
+  const sourceLines = normalized.split(SEPARATOR);
+  const lines = candidate.replace(/\r\n?/gu, "\n").trim().split(SEPARATOR);
+  const mark = (line) => {
+    const match = LAYOUT_MARKER_RE.exec(line);
+    return match ? `${match[1].length}:${match[2]}` : "";
+  };
+  if (lines.length !== sourceLines.length || lines.some((line, index) => mark(line) !== mark(sourceLines[index]))) return candidate;
+  return lines.map((line, index) => index === 0 ? line : separators[index - 1] + line).join("");
+}
 var withinRange = (ratio, range) => ratio >= range.min && ratio <= range.max;
 var SINGLE_PASS_TEMPERATURE = 0.7;
 var SINGLE_PASS_FORMAT_GUIDANCE = " Keep the source's formatting exactly: list markers, numbering, headings, bold and italic markers, indentation and line breaks stay where they are. Rewrite only the wording between them.";
@@ -21830,6 +21843,7 @@ async function runSinglePassParaphrase(text, complete, options = {}) {
       feedback = placeholderRetryGuidance(protectedText.tokens, error2.message);
       continue;
     }
+    candidate = withSourceSeparators(masked, candidate);
     const candidateLength = unicodeLength(candidate);
     const ratio = candidateLength / sourceLength;
     const lengthOk = withinRange(ratio, SINGLE_PASS_LENGTH_TARGET);
@@ -22049,7 +22063,7 @@ async function removeWatermark(text, config2, options = {}) {
 }
 
 // src/index.ts
-var VERSION = "0.2.0";
+var VERSION = "0.2.1";
 function describeModel(config2) {
   return config2.fallbacks.length ? `${config2.preset.model}, then ${config2.fallbacks.map((preset) => preset.model).join(", ")} if it gives nothing` : `${config2.preset.model} (${config2.preset.note})`;
 }

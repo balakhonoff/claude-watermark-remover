@@ -433,6 +433,23 @@ export function layoutSignature(text: string): string[][] {
 export function layoutKept(source: string, candidate: string): boolean {
   return JSON.stringify(layoutSignature(source)) === JSON.stringify(layoutSignature(candidate));
 }
+/**
+ * Put the source's own line separators back into a draft that kept every line. Text pasted from a word processor
+ * separates paragraphs with one line break; models answer with a blank line between them, which is the same layout
+ * written differently. When the draft has the same lines in the same order, each starting with the same mark, the
+ * result gets the separators of the source; otherwise the draft is returned as it is and the layout check decides.
+ */
+export function withSourceSeparators(source: string, candidate: string): string {
+  // A separator is one line break plus any blank lines after it; a line's own indentation stays with the line.
+  const SEPARATOR = /\n(?:[ \t]*\n)*/gu;
+  const normalized = source.replace(/\r\n?/gu, "\n").trim();
+  const separators = normalized.match(SEPARATOR) ?? [];
+  const sourceLines = normalized.split(SEPARATOR);
+  const lines = candidate.replace(/\r\n?/gu, "\n").trim().split(SEPARATOR);
+  const mark = (line: string) => { const match = LAYOUT_MARKER_RE.exec(line); return match ? `${match[1].length}:${match[2]}` : ""; };
+  if (lines.length !== sourceLines.length || lines.some((line, index) => mark(line) !== mark(sourceLines[index]))) return candidate;
+  return lines.map((line, index) => index === 0 ? line : separators[index - 1] + line).join("");
+}
 const withinRange = (ratio: number, range: { min: number; max: number }) => ratio >= range.min && ratio <= range.max;
 /**
  * Sampling temperature of the paraphrase in every channel. The article ran at 0. Measured 2026-10-02 on three texts
@@ -562,6 +579,7 @@ export async function runSinglePassParaphrase(text: string, complete: StageCompl
       feedback = placeholderRetryGuidance(protectedText.tokens, error.message);
       continue;
     }
+    candidate = withSourceSeparators(masked, candidate);
     const candidateLength = unicodeLength(candidate);
     const ratio = candidateLength / sourceLength;
     const lengthOk = withinRange(ratio, SINGLE_PASS_LENGTH_TARGET);

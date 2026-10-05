@@ -10,7 +10,7 @@ import { ConfigError, PRESETS, readConfig, type Config } from "./config.js";
 import { STYLE_GUIDANCE_MAX_CHARS } from "./core.js";
 import { MAX_CHARS, MIN_CHARS, RemovalError, removeWatermark } from "./remove.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 
 function describeModel(config: Config): string {
   return config.fallbacks.length ? `${config.preset.model}, then ${config.fallbacks.map(preset => preset.model).join(", ")} if it gives nothing` : `${config.preset.model} (${config.preset.note})`;

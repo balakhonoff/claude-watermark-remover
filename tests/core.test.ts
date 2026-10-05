@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CompletionTokenLimitError } from "../src/completion-errors.js";
 import {
-  layoutKept, layoutSignature, LINE_STRUCTURE_GUIDANCE, PipelineValidationError, runSinglePassParaphrase, SINGLE_PASS_LENGTH_LIMIT,
+  layoutKept, layoutSignature, withSourceSeparators, LINE_STRUCTURE_GUIDANCE, PipelineValidationError, runSinglePassParaphrase, SINGLE_PASS_LENGTH_LIMIT,
   SINGLE_PASS_LENGTH_TARGET, SINGLE_PASS_MAX_CALLS,
   SINGLE_PASS_NOVELTY_TARGET, SINGLE_PASS_RETRY_FLOOR, SINGLE_PASS_TEMPERATURE, STYLE_GUIDANCE_MAX_CHARS, type StageRequest,
 } from "../src/core.js";
@@ -149,6 +149,24 @@ describe("enforced limits of the single pass (review 2026-10-02)", () => {
     expect(layoutSignature("**Bold start** is not a marker\n  * nested item\n2026. A year is not a list number")).toEqual([["", "2:*", ""]]);
     expect(layoutKept(list, reworded(list))).toBe(true);
     expect(layoutKept(list, reworded(list).replace("1. ", "1) "))).toBe(false);
+  });
+
+  it("returns the source's own line separators when the model keeps every line but writes the breaks differently", async () => {
+    // Text pasted from a word processor: paragraphs separated by one line break.
+    const pasted = "Heidi built her network before she needed it, and the case shows how.\nThe newsletter gave her the excuse to call people she did not know yet.\nBy the time she ran the company, most of the industry already knew her name.";
+    let calls = 0;
+    const blankLines = await runSinglePassParaphrase(pasted, async request => { calls += 1; return { content: reworded(masked(request)).replace(/\n/gu, "\n\n") }; });
+    expect(calls).toBe(1);
+    expect(blankLines.text.split("\n")).toHaveLength(3);
+    expect(layoutKept(pasted, blankLines.text)).toBe(true);
+    const mixed = "## Plan\n\nFirst line of the note.\nSecond line of the note.\n\n\n- one item\n  - nested item\r\n- last item";
+    const draft = "## nalP\nenil tsriF.\n\nenil dnoceS.\n- eno meti\n\n  - detsen meti\n\n\n- tsal meti";
+    expect(withSourceSeparators(mixed, draft)).toBe("## nalP\n\nenil tsriF.\nenil dnoceS.\n\n\n- eno meti\n  - detsen meti\n- tsal meti");
+    // A lost list marker or a merged line is not repaired and still fails the layout check.
+    for (const broken of [draft.replace("- eno meti", "eno meti"), draft.replace("\nenil tsriF.\n\nenil dnoceS.", "\nenil tsriF. enil dnoceS.")]) {
+      expect(withSourceSeparators(mixed, broken)).toBe(broken);
+      expect(layoutKept(mixed, broken)).toBe(false);
+    }
   });
 
   it("asks again when the list is flattened, and fails the run when the second draft flattens it too", async () => {
