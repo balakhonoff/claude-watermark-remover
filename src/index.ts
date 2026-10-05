@@ -10,7 +10,7 @@ import { ConfigError, PRESETS, readConfig, type Config } from "./config.js";
 import { STYLE_GUIDANCE_MAX_CHARS } from "./core.js";
 import { MAX_CHARS, MIN_CHARS, RemovalError, removeWatermark } from "./remove.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 function describeModel(config: Config): string {
   return `${config.preset.model} (${config.preset.note})`;
@@ -20,14 +20,14 @@ async function serve(): Promise<void> {
   let config: Config | undefined;
   let configError: string | undefined;
   try { config = readConfig(); } catch (error) { configError = error instanceof ConfigError ? error.message : String(error); }
-  const instructions = "Removes a statistical AI text watermark (SynthID-style, as used by Claude and Gemini) by rewriting the wording with " +
+  const instructions = "Removes a statistical AI text watermark, the kind ChatGPT, Claude and Gemini put into text, by rewriting the wording with " +
     (config ? describeModel(config) : "the configured OpenRouter model") +
     ", paid with the user's own OpenRouter key. One model draft; a second only when a check of length, layout or wording fails. " +
     "No second model checks the meaning: tell the user to compare the result with the source. Use it only when the user asks to remove a watermark or to rewrite a text for that purpose.";
   const server = new McpServer({ name: "claude-watermark-remover", version: VERSION }, { instructions });
   server.registerTool("remove_watermark", {
     title: "Remove the watermark, keep the text",
-    description: "Remove a statistical AI watermark without humanizing: one rewrite by one model that is instructed to keep the meaning, structure, formatting and language of the text. Links, quotations, amounts and percentages are masked and return unchanged. Returns the rewritten text with novelty_percent (share of five-word sequences replaced; the target is 80%), layout_kept, model_calls and the cost OpenRouter reported. A rewrite that breaks the layout or leaves 70–140% of the source length is an error. No meaning check and no AI score are run: compare the result with the source. Texts of 750+ characters give a reliable share; shorter texts are processed but the share is coarse.",
+    description: "Remove a statistical AI watermark without humanizing: one rewrite by one model that is instructed to keep the meaning, structure, formatting and language of the text. Links, quotations, amounts and percentages are masked and return unchanged. Returns the rewritten text with novelty_percent (share of five-word sequences replaced; the target is 80%), layout_kept, model_calls and the cost OpenRouter reported. A rewrite that breaks the layout or leaves 70–140% of the source length is an error. No meaning check and no AI score are run: compare the result with the source. Best effort: the ChatGPT, Claude and Gemini watermark detectors are not public, so complete removal cannot be verified. Texts of 750+ characters give a reliable share; shorter texts are processed but the share is coarse.",
     inputSchema: {
       text: z.string().min(MIN_CHARS).max(MAX_CHARS).describe(`${MIN_CHARS}–${MAX_CHARS} characters of prose. Lists and headings are fine; code and tables are not.`),
       style_guidance: z.string().max(STYLE_GUIDANCE_MAX_CHARS).optional().describe(`The user's own writing-style rules, if any: a style skill, custom instructions or a style named in the conversation. Pass them complete and in their original wording, up to ${STYLE_GUIDANCE_MAX_CHARS} characters. They shape wording only; the model is told not to let them change facts, terms or numbers, and nothing verifies that. Omit when no style rules exist.`),
@@ -52,7 +52,7 @@ async function serve(): Promise<void> {
     const payload = config
       ? { model: config.preset.model, reasoning: config.preset.reasoning, temperature: config.temperature, providers: config.preset.providers, base_url: config.baseUrl, note: config.preset.note,
           presets: Object.values(PRESETS).map(preset => ({ model: preset.model, reasoning: preset.reasoning, note: preset.note })),
-          hosted_alternative: "https://painintheagent.com — the same rewrite without keys, as a connector for claude.ai on the web and phones and as a web tool, plus the Humanizer." }
+          hosted_alternative: "https://painintheagent.com: the same rewrite without keys, as a connector for claude.ai on the web and phones and as a web tool, plus the Humanizer." }
       : { error: configError };
     return { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload as Record<string, unknown> };
   });

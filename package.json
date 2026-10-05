@@ -1,8 +1,8 @@
 {
   "name": "claude-watermark-remover",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
-  "description": "Open-source MCP server that removes statistical AI text watermarks (SynthID-style, Claude and Gemini) with your own OpenRouter key.",
+  "description": "Open-source MCP server that rewrites ChatGPT, Claude and Gemini text so its statistical watermark no longer matches, with your own OpenRouter key.",
   "license": "MIT",
   "author": "Kirill Balakhonov",
   "repository": "github:balakhonoff/claude-watermark-remover",

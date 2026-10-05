@@ -1,14 +1,14 @@
 # Claude Watermark Remover
 
-An open-source MCP server that removes the statistical text watermark (SynthID-style, the kind Claude and Gemini
-put into their output) by rewriting the wording while keeping the meaning, the structure and the formatting. It runs on
-your computer and talks only to [OpenRouter](https://openrouter.ai) with **your own key** — including OpenRouter's
-free models, so the whole thing can cost nothing.
+An open-source MCP server that removes statistical text watermarks, the kind ChatGPT, Claude and Gemini put into
+the text they write, by rewriting the wording while keeping the meaning, the structure and the formatting. It runs
+on your computer and talks only to [OpenRouter](https://openrouter.ai) with **your own key**. OpenRouter's free
+models work too, so the whole thing can cost nothing.
 
 Works in Claude Desktop, Claude Code, Codex, Cursor and any other MCP client.
 
 > **Prefer not to deal with keys and installs?**
-> **[Hosted version at painintheagent.com →](https://painintheagent.com/tools/ai-text-watermark-remover/)**
+> **[Use the hosted version at painintheagent.com](https://painintheagent.com/tools/ai-text-watermark-remover/)**
 > The same rewrite as a connector for claude.ai (it works in the browser and on phones, where a local MCP server
 > cannot run) and as a web tool, plus an AI Humanizer and detectors. No OpenRouter account needed: three free runs,
 > then $5 for 100,000 characters.
@@ -26,14 +26,17 @@ Works in Claude Desktop, Claude Code, Codex, Cursor and any other MCP client.
    is requested; a result that breaks the layout or leaves 70–140% of the source length is an error, not a result.
 4. Restores the masked parts and returns the text with `novelty_percent` (the share of five-word sequences replaced).
 
-No second model checks the meaning. The result is a draft you compare with your source — that is what the tool
-tells the assistant, too.
+No second model checks the meaning. The result is a draft you compare with your source, and the tool tells the
+assistant the same thing.
 
 The method is the one measured in [Can rewriting remove AI text watermarks? My SynthID test](https://painintheagent.com/blog/text-watermark-removal-retest/):
-a single paraphrase on Qwen3.7 Plus crossed below the reference detector's threshold in 10 of 10 English reports
-and kept 100% of the claims checked by the panel. This program uses a stricter prompt (terms, layout, statement
-strength) and sampling at temperature 0.7, which were not part of that test. Private production keys of Claude and
-Gemini are not published, so complete removal cannot be verified against them.
+a single paraphrase on Qwen3.7 Plus crossed below the reference SynthID Text detector's threshold in 10 of 10 English
+reports and kept 100% of the claims checked by the panel.
+
+Small print. This program uses a stricter prompt (terms, layout, statement strength) and sampling at temperature
+0.7, which were not part of that test. The ChatGPT, Claude and Gemini watermark detectors are not public, so
+complete removal cannot be verified against them, and OpenAI's textGrain, announced for ChatGPT in October 2026, is
+a separate scheme that the test did not cover.
 
 ## Install
 
@@ -43,7 +46,7 @@ model it costs nothing (see [Free models](#free-models)).
 
 ### Claude Desktop
 
-1. Download [claude-watermark-remover-0.1.0.mcpb](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.mcpb) (checksums in [releases/SHA256SUMS](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/SHA256SUMS)).
+1. Download [claude-watermark-remover-0.1.1.mcpb](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.1.mcpb) (checksums in [releases/SHA256SUMS](https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/SHA256SUMS)).
 2. Open the file. Claude Desktop installs it as an extension and asks for your OpenRouter API key (stored by Claude
    Desktop, not by this program) and, optionally, a model.
 3. In a chat: *"Remove the watermark from this text: …"*.
@@ -51,7 +54,7 @@ model it costs nothing (see [Free models](#free-models)).
 ### Claude Code
 
 ```bash
-claude mcp add watermark-remover -e OPENROUTER_API_KEY=sk-or-… -- npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover
+claude mcp add watermark-remover -e OPENROUTER_API_KEY=sk-or-… -- npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.1.tgz claude-watermark-remover
 ```
 
 Then in a session: *"Use remove_watermark on the text in draft.md and show me the result."*
@@ -61,13 +64,13 @@ so keep a credit limit on it.
 ### Codex, Cursor and other MCP clients
 
 Install once, then add a stdio server with the command `claude-watermark-remover` and the environment variable
-`OPENROUTER_API_KEY`:
+`OPENROUTER_API_KEY`.
 
 ```bash
-npm install -g https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz
+npm install -g https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.1.tgz
 ```
 
-For Codex, in `~/.codex/config.toml`:
+For Codex, put this into `~/.codex/config.toml`.
 
 ```toml
 [mcp_servers.watermark-remover]
@@ -79,7 +82,7 @@ env = { OPENROUTER_API_KEY = "sk-or-…" }
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-…
-npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.0.tgz claude-watermark-remover --text-file draft.txt
+npx -y --package=https://github.com/balakhonoff/claude-watermark-remover/raw/main/releases/claude-watermark-remover-0.1.1.tgz claude-watermark-remover --text-file draft.txt
 ```
 
 The package is a single self-contained file (`dist/index.cjs`, Node 22+); the tarball and the `.mcpb` live in
@@ -93,7 +96,7 @@ rules.
 
 | Tool | What it does |
 |---|---|
-| `remove_watermark` | `text` (100–10,000 characters) and optional `style_guidance` (your writing-style rules, applied to wording only) → the rewritten text, `novelty_percent`, `target_met`, `layout_kept`, `model`, `model_calls`, `seconds`, `cost_usd`. |
+| `remove_watermark` | `text` (100–10,000 characters) and optional `style_guidance` (your writing-style rules, applied to wording only). Returns the rewritten text, `novelty_percent`, `target_met`, `layout_kept`, `model`, `model_calls`, `seconds`, `cost_usd`. |
 | `get_configuration` | The model, reasoning setting and temperature in use, and the measured presets. No model call. |
 
 Texts of 750 characters (about 120 words) and more give a reliable share; on a short text one kept citation such as
@@ -105,7 +108,7 @@ Texts of 750 characters (about 120 words) and more give a reliable share; on a s
 |---|---|---|
 | `qwen/qwen3.7-plus` (default) | ≈ $0.001 per 1,000 characters | 2–10 s, 85–100% replaced, layout kept. The model of the published test. |
 | `qwen/qwen3.8-27b:free` | free | 46 s, 81% replaced, layout kept. Needs low reasoning (set automatically). Often answers 429 "busy": the server waits and asks again up to three times. |
-| `nvidia/nemotron-3-super-120b-a12b:free` | free | 12–25 s, 63–78% replaced, layout kept. Available only if you allow "free endpoints that may train on inputs" in [OpenRouter's privacy settings](https://openrouter.ai/settings/privacy) — your text may then be used for training. |
+| `nvidia/nemotron-3-super-120b-a12b:free` | free | 12–25 s, 63–78% replaced, layout kept. Available only if you allow "free endpoints that may train on inputs" in [OpenRouter's privacy settings](https://openrouter.ai/settings/privacy). your text may then be used for training. |
 
 Any other OpenRouter model id works; a `:free` model gets low reasoning and busy retries by default, a paid one no
 reasoning. Override with `WATERMARK_REASONING` (`none`, `low`, `medium`, `high`), `WATERMARK_TEMPERATURE` (default
