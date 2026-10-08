@@ -169,6 +169,13 @@ describe("enforced limits of the single pass (review 2026-10-02)", () => {
     }
   });
 
+  it("treats a paragraph soft-wrapped in the middle of sentences as one paragraph", () => {
+    const wrapped = "In fog, the score behaves differently. The first term carries half of the drop in the first\nscene and two thirds in the second, which the table shows in detail for every\nsensor of the test vehicle and for the two reference drives of the week.";
+    expect(layoutSignature(wrapped)).toEqual([[""]]);
+    expect(layoutKept(wrapped, wrapped.replace(/\n/gu, " "))).toBe(true);
+    expect(layoutSignature("- one\n- two\n- three")).toEqual([["0:-", "0:-", "0:-"]]);
+  });
+
   it("asks again when the list is flattened, and fails the run when the second draft flattens it too", async () => {
     const prompts: string[] = [];
     let call = 0;
@@ -201,7 +208,20 @@ describe("enforced limits of the single pass (review 2026-10-02)", () => {
     expect(ratio).toBeGreaterThan(SINGLE_PASS_LENGTH_TARGET.max);
     expect(ratio).toBeLessThanOrEqual(SINGLE_PASS_LENGTH_LIMIT.max);
 
-    await expect(runSinglePassParaphrase(source, async request => ({ content: padded(masked(request), 0.5) }))).rejects.toThrow(/allowed range is 70–140%/u);
+    // Every draft 150% long with the layout kept: one extra draft is tried, named in words, and the run still fails if it is long too.
+    let longCalls = 0, lastPrompt = "";
+    await expect(runSinglePassParaphrase(source, async request => { longCalls += 1; lastPrompt = request.systemPrompt; return { content: padded(masked(request), 0.5) }; })).rejects.toThrow(/allowed range is 70–140%/u);
+    expect(longCalls).toBe(SINGLE_PASS_MAX_CALLS + 1);
+    expect(lastPrompt).toMatch(/Return about \d+ words/u);
+    // The third draft fits: the run succeeds with three calls.
+    let thirdCalls = 0;
+    const third = await runSinglePassParaphrase(source, async request => { thirdCalls += 1; return { content: thirdCalls < 3 ? padded(masked(request), 0.5) : reworded(masked(request)) }; });
+    expect(thirdCalls).toBe(3);
+    expect(third.calls).toBe(3);
+    // No extra draft when the layout is broken as well, or when a draft already fits the limit.
+    let brokenCalls = 0;
+    await expect(runSinglePassParaphrase(source, async request => { brokenCalls += 1; return { content: padded(masked(request), 0.5).replace(/\n\n/gu, " ") }; })).rejects.toThrow(PipelineValidationError);
+    expect(brokenCalls).toBe(SINGLE_PASS_MAX_CALLS);
     await expect(runSinglePassParaphrase(source, async request => ({ content: reworded(masked(request)).replace(/\n\n/gu, " ") }))).rejects.toThrow(PipelineValidationError);
   });
 

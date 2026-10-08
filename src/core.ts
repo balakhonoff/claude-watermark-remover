@@ -375,7 +375,7 @@ export function needsLineStructureGuidance(masked: string): boolean {
   return masked
     .trim()
     .split(/\n\s*\n/u)
-    .some((paragraph) => paragraph.includes("\n"));
+    .some((paragraph) => paragraph.includes("\n") && !isSoftWrappedProse(paragraph));
 }
 
 /**
@@ -411,6 +411,12 @@ export const SINGLE_PASS_ROUTE: ModelRoute = "qwen37plus";
 export const SINGLE_PASS_NOVELTY_TARGET = 80;
 export const SINGLE_PASS_RETRY_FLOOR = SINGLE_PASS_NOVELTY_TARGET;
 export const SINGLE_PASS_MAX_CALLS = 2;
+/**
+ * One more draft when the only thing wrong with every draft so far is its length and the run would otherwise fail:
+ * short texts in some languages come back a third longer twice while keeping the layout and the wording target.
+ */
+export const SINGLE_PASS_LENGTH_EXTRA_CALLS = 1;
+const wordCount = (text: string) => (text.match(/\S+/gu) ?? []).length;
 /** The length the prompt asks for; a draft outside it triggers the second draft. Shares of the source length. */
 export const SINGLE_PASS_LENGTH_TARGET = { min: 0.8, max: 1.25 } as const;
 /**
@@ -420,15 +426,33 @@ export const SINGLE_PASS_LENGTH_TARGET = { min: 0.8, max: 1.25 } as const;
 export const SINGLE_PASS_LENGTH_LIMIT = { min: 0.7, max: 1.4 } as const;
 
 const LAYOUT_MARKER_RE = /^([ \t]*)(#{1,6}(?=\s)|[-*+•–—](?=\s)|\d{1,3}[.)](?=\s)|>)/u;
+const SENTENCE_END_RE = /[.!?…]["'’”)}\]]*$/u;
+/**
+ * PDF and paper copy/paste often wraps one prose paragraph into many long visual lines in the middle of sentences.
+ * Those breaks are transport noise, not document structure. Lists, headings, short verse-like lines and
+ * sentence-per-line paragraphs keep the strict line contract.
+ */
+function isSoftWrappedProse(paragraph: string): boolean {
+  const lines = paragraph.split("\n").map(line => line.trim()).filter(Boolean);
+  if (lines.length < 3 || lines.some(line => LAYOUT_MARKER_RE.test(line))) return false;
+  const continued = lines.slice(0, -1);
+  const evidence = Math.floor(continued.length / 2) + 1;
+  const longLines = continued.filter(line => unicodeLength(line) >= 40).length;
+  const midSentence = continued.filter(line => !SENTENCE_END_RE.test(line)).length;
+  return longLines >= evidence && midSentence >= evidence;
+}
 /**
  * The layout the rewrite must keep: paragraphs, the lines inside each, and what starts every line (heading mark, list
  * marker or number, quote mark, with its indentation). The wording between them is free.
  */
 export function layoutSignature(text: string): string[][] {
-  return text.replace(/\r\n?/gu, "\n").trim().split(/\n\s*\n/u).map(paragraph => paragraph.split("\n").map(line => {
-    const match = LAYOUT_MARKER_RE.exec(line);
-    return match ? `${match[1].length}:${match[2]}` : "";
-  }));
+  return text.replace(/\r\n?/gu, "\n").trim().split(/\n\s*\n/u).map(paragraph => {
+    if (isSoftWrappedProse(paragraph)) return [""];
+    return paragraph.split("\n").map(line => {
+      const match = LAYOUT_MARKER_RE.exec(line);
+      return match ? `${match[1].length}:${match[2]}` : "";
+    });
+  });
 }
 export function layoutKept(source: string, candidate: string): boolean {
   return JSON.stringify(layoutSignature(source)) === JSON.stringify(layoutSignature(candidate));
@@ -542,7 +566,8 @@ export async function runSinglePassParaphrase(text: string, complete: StageCompl
   let lengthWasOff = false;
   let calls = 0;
   let retryReason: string | undefined;
-  for (let attempt = 0; attempt < SINGLE_PASS_MAX_CALLS; attempt += 1) {
+  let maxCalls = SINGLE_PASS_MAX_CALLS;
+  for (let attempt = 0; attempt < maxCalls; attempt += 1) {
     const bounds = { source: sourceLength, min: Math.ceil(sourceLength * SINGLE_PASS_LENGTH_TARGET.min), max: Math.floor(sourceLength * SINGLE_PASS_LENGTH_TARGET.max),
       ...(attempt > 0 && lengthWasOff ? { previous: previousLength } : {}) };
     const paragraphBounds = attempt === 0 || previousParagraphs === undefined || previousParagraphs === sourceParagraphs
@@ -600,6 +625,8 @@ export async function runSinglePassParaphrase(text: string, complete: StageCompl
     previousLength = candidateLength;
     previousParagraphs = candidateParagraphs;
     lengthWasOff = !lengthOk;
+    // The last regular draft is only too long or too short: one more try instead of a failed run.
+    if (attempt === SINGLE_PASS_MAX_CALLS - 1 && best && !withinRange(best.ratio, SINGLE_PASS_LENGTH_LIMIT) && best.layoutOk && noveltyOk && layoutOk) maxCalls = SINGLE_PASS_MAX_CALLS + SINGLE_PASS_LENGTH_EXTRA_CALLS;
     // The seed is fixed: the retry number and the named failure keep the prompt, and so the draw, distinct.
     feedback = (noveltyOk
       ? ` Retry ${attempt + 1}: keep the wording of your previous attempt as different from the source as it was, and fix what is named here.`
@@ -609,7 +636,12 @@ export async function runSinglePassParaphrase(text: string, complete: StageCompl
         ` between active and passive voice and changing verbs, connectives and adverbs. Nouns and noun phrases are terms: every one of` +
         ` them, and every name and number, appears in your answer in the source's own words.`) +
       (layoutOk ? "" : " Your previous attempt changed the layout. Return the same paragraphs with the same number of lines in each, and start" +
-        " every line with the same heading mark, list marker or number as the matching line of sourceText.");
+        " every line with the same heading mark, list marker or number as the matching line of sourceText.") +
+      (lengthOk ? "" : ratio > 1
+        ? ` Your previous attempt was ${candidateLength} characters, ${wordCount(candidate)} words, against ${sourceLength} characters, ${wordCount(masked)} words, in the source.` +
+          ` Return about ${wordCount(masked)} words: rewrite your previous attempt sentence by sentence and cut every added adjective, connective, example and explanation. Add nothing.`
+        : ` Your previous attempt was ${candidateLength} characters, ${wordCount(candidate)} words, against ${sourceLength} characters, ${wordCount(masked)} words, in the source.` +
+          ` Return about ${wordCount(masked)} words: something of the source is missing, and every fact, name, number and sentence of the source must be present.`);
   }
   if (!best) throw lastError ?? new PipelineValidationError("no valid draft was produced");
   // No compromise is returned as a success: a broken layout or a length outside the limit fails the run, uncharged.

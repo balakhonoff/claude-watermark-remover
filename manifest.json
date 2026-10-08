@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "claude-watermark-remover",
   "display_name": "Claude Watermark Remover",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Rewrite ChatGPT, Claude and Gemini text so its statistical watermark no longer matches, with your own OpenRouter key. Free models included.",
   "long_description": "One rewrite by one model that is instructed to keep the meaning, structure, formatting and language of your text; links, quotations, amounts and percentages return unchanged. Your text goes only to OpenRouter with your own key. Measured on SynthID Text with a research key; the ChatGPT, Claude and Gemini detectors are not public, so complete removal cannot be verified. Hosted version without keys, for claude.ai on the web and phones: https://painintheagent.com",
   "author": {

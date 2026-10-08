@@ -21740,7 +21740,7 @@ function fiveGramNovelty(source, candidate) {
   return Math.round((candidateGrams.length - reused) / candidateGrams.length * 100);
 }
 function needsLineStructureGuidance(masked) {
-  return masked.trim().split(/\n\s*\n/u).some((paragraph) => paragraph.includes("\n"));
+  return masked.trim().split(/\n\s*\n/u).some((paragraph) => paragraph.includes("\n") && !isSoftWrappedProse(paragraph));
 }
 function placeholderRetryGuidance(tokens, failureMessage) {
   const list = tokens.map((token) => token.placeholder).join(", ");
@@ -21750,14 +21750,29 @@ var SINGLE_PASS_ROUTE = "qwen37plus";
 var SINGLE_PASS_NOVELTY_TARGET = 80;
 var SINGLE_PASS_RETRY_FLOOR = SINGLE_PASS_NOVELTY_TARGET;
 var SINGLE_PASS_MAX_CALLS = 2;
+var SINGLE_PASS_LENGTH_EXTRA_CALLS = 1;
+var wordCount = (text) => (text.match(/\S+/gu) ?? []).length;
 var SINGLE_PASS_LENGTH_TARGET = { min: 0.8, max: 1.25 };
 var SINGLE_PASS_LENGTH_LIMIT = { min: 0.7, max: 1.4 };
 var LAYOUT_MARKER_RE = /^([ \t]*)(#{1,6}(?=\s)|[-*+•–—](?=\s)|\d{1,3}[.)](?=\s)|>)/u;
+var SENTENCE_END_RE = /[.!?…]["'’”)}\]]*$/u;
+function isSoftWrappedProse(paragraph) {
+  const lines = paragraph.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 3 || lines.some((line) => LAYOUT_MARKER_RE.test(line))) return false;
+  const continued = lines.slice(0, -1);
+  const evidence = Math.floor(continued.length / 2) + 1;
+  const longLines = continued.filter((line) => unicodeLength(line) >= 40).length;
+  const midSentence = continued.filter((line) => !SENTENCE_END_RE.test(line)).length;
+  return longLines >= evidence && midSentence >= evidence;
+}
 function layoutSignature(text) {
-  return text.replace(/\r\n?/gu, "\n").trim().split(/\n\s*\n/u).map((paragraph) => paragraph.split("\n").map((line) => {
-    const match = LAYOUT_MARKER_RE.exec(line);
-    return match ? `${match[1].length}:${match[2]}` : "";
-  }));
+  return text.replace(/\r\n?/gu, "\n").trim().split(/\n\s*\n/u).map((paragraph) => {
+    if (isSoftWrappedProse(paragraph)) return [""];
+    return paragraph.split("\n").map((line) => {
+      const match = LAYOUT_MARKER_RE.exec(line);
+      return match ? `${match[1].length}:${match[2]}` : "";
+    });
+  });
 }
 function layoutKept(source, candidate) {
   return JSON.stringify(layoutSignature(source)) === JSON.stringify(layoutSignature(candidate));
@@ -21803,7 +21818,8 @@ async function runSinglePassParaphrase(text, complete, options = {}) {
   let lengthWasOff = false;
   let calls = 0;
   let retryReason;
-  for (let attempt = 0; attempt < SINGLE_PASS_MAX_CALLS; attempt += 1) {
+  let maxCalls = SINGLE_PASS_MAX_CALLS;
+  for (let attempt = 0; attempt < maxCalls; attempt += 1) {
     const bounds = {
       source: sourceLength,
       min: Math.ceil(sourceLength * SINGLE_PASS_LENGTH_TARGET.min),
@@ -21863,7 +21879,8 @@ async function runSinglePassParaphrase(text, complete, options = {}) {
     previousLength = candidateLength;
     previousParagraphs = candidateParagraphs;
     lengthWasOff = !lengthOk;
-    feedback = (noveltyOk ? ` Retry ${attempt + 1}: keep the wording of your previous attempt as different from the source as it was, and fix what is named here.` : ` Retry ${attempt + 1}: your previous attempt kept too much of the source's wording \u2014 only ${novelty}% of its 5-word sequences were new, and at least ${SINGLE_PASS_NOVELTY_TARGET}% should be. Change the construction and the word order of every sentence so that no run of five consecutive words repeats the source. Reach that only by reordering clauses, splitting or joining sentences, switching between active and passive voice and changing verbs, connectives and adverbs. Nouns and noun phrases are terms: every one of them, and every name and number, appears in your answer in the source's own words.`) + (layoutOk ? "" : " Your previous attempt changed the layout. Return the same paragraphs with the same number of lines in each, and start every line with the same heading mark, list marker or number as the matching line of sourceText.");
+    if (attempt === SINGLE_PASS_MAX_CALLS - 1 && best && !withinRange(best.ratio, SINGLE_PASS_LENGTH_LIMIT) && best.layoutOk && noveltyOk && layoutOk) maxCalls = SINGLE_PASS_MAX_CALLS + SINGLE_PASS_LENGTH_EXTRA_CALLS;
+    feedback = (noveltyOk ? ` Retry ${attempt + 1}: keep the wording of your previous attempt as different from the source as it was, and fix what is named here.` : ` Retry ${attempt + 1}: your previous attempt kept too much of the source's wording \u2014 only ${novelty}% of its 5-word sequences were new, and at least ${SINGLE_PASS_NOVELTY_TARGET}% should be. Change the construction and the word order of every sentence so that no run of five consecutive words repeats the source. Reach that only by reordering clauses, splitting or joining sentences, switching between active and passive voice and changing verbs, connectives and adverbs. Nouns and noun phrases are terms: every one of them, and every name and number, appears in your answer in the source's own words.`) + (layoutOk ? "" : " Your previous attempt changed the layout. Return the same paragraphs with the same number of lines in each, and start every line with the same heading mark, list marker or number as the matching line of sourceText.") + (lengthOk ? "" : ratio > 1 ? ` Your previous attempt was ${candidateLength} characters, ${wordCount(candidate)} words, against ${sourceLength} characters, ${wordCount(masked)} words, in the source. Return about ${wordCount(masked)} words: rewrite your previous attempt sentence by sentence and cut every added adjective, connective, example and explanation. Add nothing.` : ` Your previous attempt was ${candidateLength} characters, ${wordCount(candidate)} words, against ${sourceLength} characters, ${wordCount(masked)} words, in the source. Return about ${wordCount(masked)} words: something of the source is missing, and every fact, name, number and sentence of the source must be present.`);
   }
   if (!best) throw lastError ?? new PipelineValidationError("no valid draft was produced");
   if (!best.layoutOk) throw new PipelineValidationError("the rewrite did not keep the paragraphs, lines or list markers of the source");
@@ -22063,7 +22080,7 @@ async function removeWatermark(text, config2, options = {}) {
 }
 
 // src/index.ts
-var VERSION = "0.2.1";
+var VERSION = "0.2.2";
 function describeModel(config2) {
   return config2.fallbacks.length ? `${config2.preset.model}, then ${config2.fallbacks.map((preset) => preset.model).join(", ")} if it gives nothing` : `${config2.preset.model} (${config2.preset.note})`;
 }
