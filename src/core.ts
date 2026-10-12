@@ -474,6 +474,27 @@ export function withSourceSeparators(source: string, candidate: string): string 
   if (lines.length !== sourceLines.length || lines.some((line, index) => mark(line) !== mark(sourceLines[index]))) return candidate;
   return lines.map((line, index) => index === 0 ? line : separators[index - 1] + line).join("");
 }
+/**
+ * Put back a line break that copying lost between two numbered items: "…will see absolutely nothing.2. The Watermark is
+ * Highly Fragile". The model naturally starts item 2 on its own line, which the strict layout check rejects, so the
+ * source is repaired first and both agree. Only a number glued to the end of a sentence (a letter, then . ! ? or …, then
+ * the digits, no space) whose predecessor already starts a line as a list number counts; "version 1.2. The" and a lone
+ * "nothing.2. X" are left alone. Same rule as the hosted service (painintheagent, 2026-10-12).
+ */
+export function repairGluedListItems(text: string): string {
+  const numbers = new Set<number>();
+  for (const line of text.split("\n")) {
+    const marker = /^[ \t]*(\d{1,3})[.)](?=\s)/u.exec(line);
+    if (marker) numbers.add(Number(marker[1]));
+  }
+  if (!numbers.size) return text;
+  return text.replace(/(\p{L}[.!?…]["'’”)\]]*)(\d{1,3})([.)])(?=[ \t]+\p{Lu})/gu, (whole, end: string, digits: string, mark: string) => {
+    const n = Number(digits);
+    if (!numbers.has(n - 1) || numbers.has(n)) return whole;
+    numbers.add(n);
+    return `${end}\n${digits}${mark}`;
+  });
+}
 const withinRange = (ratio: number, range: { min: number; max: number }) => ratio >= range.min && ratio <= range.max;
 /**
  * Sampling temperature of the paraphrase in every channel. The article ran at 0. Measured 2026-10-02 on three texts
@@ -545,8 +566,10 @@ export interface SinglePassRun {
   retryReason?: string;
 }
 
-export async function runSinglePassParaphrase(text: string, complete: StageCompleter, options: SinglePassOptions = {}): Promise<SinglePassRun> {
-  requireNonempty(text, "text");
+export async function runSinglePassParaphrase(source: string, complete: StageCompleter, options: SinglePassOptions = {}): Promise<SinglePassRun> {
+  requireNonempty(source, "text");
+  // A numbered item glued to the previous sentence by copying would fail the layout check of every natural draft.
+  const text = repairGluedListItems(source);
   const temperature = options.temperature ?? SINGLE_PASS_TEMPERATURE;
   const styleGuidance = options.styleGuidance?.trim() ?? "";
   if (unicodeLength(styleGuidance) > STYLE_GUIDANCE_MAX_CHARS) throw new PipelineValidationError("style guidance is longer than the limit");

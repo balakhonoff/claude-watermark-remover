@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CompletionTokenLimitError } from "../src/completion-errors.js";
 import {
-  layoutKept, layoutSignature, withSourceSeparators, LINE_STRUCTURE_GUIDANCE, PipelineValidationError, runSinglePassParaphrase, SINGLE_PASS_LENGTH_LIMIT,
+  layoutKept, layoutSignature, repairGluedListItems, withSourceSeparators, LINE_STRUCTURE_GUIDANCE, PipelineValidationError, runSinglePassParaphrase, SINGLE_PASS_LENGTH_LIMIT,
   SINGLE_PASS_LENGTH_TARGET, SINGLE_PASS_MAX_CALLS,
   SINGLE_PASS_NOVELTY_TARGET, SINGLE_PASS_RETRY_FLOOR, SINGLE_PASS_TEMPERATURE, STYLE_GUIDANCE_MAX_CHARS, type StageRequest,
 } from "../src/core.js";
@@ -17,6 +18,22 @@ const reworded = (text: string) => text.replace(/\p{L}{2,}/gu, word => (/^T$/u.t
 const nearCopy = (text: string) => text.replace(/^\p{L}+/u, "Our");
 
 describe("watermark removal without humanizing: the single-pass paraphrase", () => {
+  it("repairs a numbered item glued to the previous sentence, and nothing that only looks like one", () => {
+    expect(repairGluedListItems("1. First\nThe end of it.2. Second item")).toBe("1. First\nThe end of it.\n2. Second item");
+    expect(repairGluedListItems("1. One\nAlpha.\"2. Two then beta.3. Three")).toBe("1. One\nAlpha.\"\n2. Two then beta.\n3. Three");
+    expect(repairGluedListItems("It saw nothing.2. The rest")).toBe("It saw nothing.2. The rest");
+    expect(repairGluedListItems("1. Notes\nUse version 1.2. The rest")).toBe("1. Notes\nUse version 1.2. The rest");
+    expect(repairGluedListItems("1. Notes\nIt grew.2. percent")).toBe("1. Notes\nIt grew.2. percent");
+    expect(repairGluedListItems("1. One\nText.\n2. Two")).toBe("1. One\nText.\n2. Two");
+  });
+
+  it("rewrites a text whose item 2 was glued to the previous sentence, as the model writes it: item 2 on its own line", async () => {
+    const glued = readFileSync(new URL("./fixtures/glued-list-item.txt", import.meta.url), "utf8");
+    const run = await runSinglePassParaphrase(glued, async request => ({ content: reworded(masked(request)).replace(/\.\s*2\. /u, ".\n2. ") }));
+    expect(run.text.split("\n")).toHaveLength(4);
+    expect(run.text).toMatch(/\n2\. /u);
+  });
+
   it("samples at 0.7 by default and takes another temperature when asked", async () => {
     const requests: StageRequest[] = [];
     const complete = async (request: StageRequest) => { requests.push(request); return { content: reworded(masked(request)) }; };
