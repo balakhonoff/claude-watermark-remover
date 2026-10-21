@@ -1,6 +1,6 @@
 {
   "name": "claude-watermark-remover",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",
   "description": "Open-source MCP server that rewrites ChatGPT, Claude and Gemini text so its statistical watermark no longer matches, with your own OpenRouter key.",
   "license": "MIT",
@@ -8,7 +8,7 @@
   "repository": "github:balakhonoff/claude-watermark-remover",
   "homepage": "https://painintheagent.com/tools/ai-text-watermark-remover/",
   "engines": {
-    "node": ">=22"
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "bin": {
     "claude-watermark-remover": "dist/index.cjs"
@@ -29,12 +29,18 @@
   },
   "devDependencies": {
     "@anthropic-ai/mcpb": "2.1.2",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "22.15.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
-    "vitest": "4.1.10",
+    "vite": "8.3.5",
+    "vitest": "4.1.12",
     "zod": "3.25.76"
   },
-  "dependencies": {}
+  "pnpm": {
+    "overrides": {
+      "tmp": "^0.2.6",
+      "vite": "^8.3.5"
+    }
+  }
 }
